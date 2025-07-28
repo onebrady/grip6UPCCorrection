@@ -63,6 +63,19 @@ const UPCDashboard: React.FC = () => {
         // Load default CSV if no saved data
         loadDefaultCSV();
       }
+
+      // Load edited products from localStorage
+      const savedEditedProducts = localStorage.getItem(
+        "upc-dashboard-edited-products"
+      );
+      if (savedEditedProducts) {
+        try {
+          const editedProductsArray = JSON.parse(savedEditedProducts);
+          setEditedProducts(new Set(editedProductsArray));
+        } catch (error) {
+          console.error("Error loading edited products:", error);
+        }
+      }
     } catch (error) {
       console.error("Error loading from localStorage:", error);
       // Try to load default CSV as fallback
@@ -87,6 +100,16 @@ const UPCDashboard: React.FC = () => {
         } catch (error) {
           console.error("Error parsing synced data:", error);
           setIsSyncing(false);
+        }
+      }
+
+      // Sync edited products across browsers
+      if (e.key === "upc-dashboard-edited-products" && e.newValue) {
+        try {
+          const newEditedProducts = JSON.parse(e.newValue);
+          setEditedProducts(new Set(newEditedProducts));
+        } catch (error) {
+          console.error("Error parsing synced edited products:", error);
         }
       }
     };
@@ -167,20 +190,16 @@ const UPCDashboard: React.FC = () => {
         const productKey = `${product.Handle}-${product["Variant SKU"]}`;
 
         // Show if no UPC OR if this product was edited in this session
-        return !hasUPC || editedProducts.has(productKey);
+        // (unless "Show only products needing UPCs" is checked)
+        if (filterMissing) {
+          // When filter is active, only show products that need UPCs
+          return !hasUPC;
+        } else {
+          // When filter is not active, show products that need UPCs OR were edited
+          return !hasUPC || editedProducts.has(productKey);
+        }
       });
       console.log("After UPC filter:", beforeUPCFilter, "->", filtered.length);
-
-      if (filterMissing) {
-        const beforeMissingFilter = filtered.length;
-        filtered = filtered.filter((product) => product.upcMissing);
-        console.log(
-          "After missing filter:",
-          beforeMissingFilter,
-          "->",
-          filtered.length
-        );
-      }
 
       console.log("Final filtered count:", filtered.length);
       setFilteredProducts(filtered);
@@ -280,6 +299,19 @@ const UPCDashboard: React.FC = () => {
       setEditedProducts((prev) => {
         const newSet = new Set([...prev, productKey]);
         console.log("Edited products count:", newSet.size);
+
+        // Sync edited products across browser windows
+        localStorage.setItem(
+          "upc-dashboard-edited-products",
+          JSON.stringify([...newSet])
+        );
+        window.dispatchEvent(
+          new StorageEvent("storage", {
+            key: "upc-dashboard-edited-products",
+            newValue: JSON.stringify([...newSet]),
+          })
+        );
+
         return newSet;
       });
 
