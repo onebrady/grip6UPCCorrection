@@ -6,8 +6,6 @@ import {
   Edit3,
   Save,
   X,
-  Upload,
-  RefreshCw,
 } from "lucide-react";
 import type { Product, ProductWithUPC } from "../types/product";
 import {
@@ -32,8 +30,6 @@ const UPCDashboard: React.FC = () => {
   const [editingUPC, setEditingUPC] = useState("");
   const [editedProducts, setEditedProducts] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
 
   // Helper function to get the correct title for a product handle
   const getProductTitle = useCallback(
@@ -77,30 +73,15 @@ const UPCDashboard: React.FC = () => {
 
   // Real-time sync with other browser windows using serverless sync service
   useEffect(() => {
-    const handleDataChange = (data: {
-      products: Product[];
-      editedProducts: Set<string>;
-    }) => {
-      setIsSyncing(true);
-      setProducts(data.products);
-      const processed = processProductsWithUPC(data.products);
-      setProcessedProducts(processed);
-      setEditedProducts(data.editedProducts);
-
-      // Show sync indicator briefly
-      setTimeout(() => setIsSyncing(false), 500);
-    };
-
     // Start polling for changes every 5 seconds
     const pollInterval = setInterval(async () => {
       try {
         const currentData = await supabaseService.loadData();
         if (currentData) {
-          const lastUpdated = await supabaseService.getLastUpdated();
-          if (lastUpdated > lastSyncTime.getTime()) {
-            setLastSyncTime(new Date(lastUpdated));
-            handleDataChange(currentData);
-          }
+          setProducts(currentData.products);
+          const processed = processProductsWithUPC(currentData.products);
+          setProcessedProducts(processed);
+          setEditedProducts(currentData.editedProducts);
         }
       } catch (error) {
         console.error("Error during sync polling:", error);
@@ -213,30 +194,6 @@ const UPCDashboard: React.FC = () => {
     }
   }, [processedProducts, filterMissing, editedProducts]);
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    setIsLoading(true);
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try {
-        const csvText = e.target?.result as string;
-        const parsedProducts = parseCSV(csvText);
-        setProducts(parsedProducts);
-        const processed = processProductsWithUPC(parsedProducts);
-        setProcessedProducts(processed);
-        // Don't set filteredProducts here - let the filter useEffect handle it
-        await supabaseService.saveData(parsedProducts, new Set());
-      } catch (error) {
-        console.error("Error parsing CSV:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    reader.readAsText(file);
-  };
-
   const handleExport = () => {
     try {
       const csvContent = exportToCSV(products);
@@ -321,33 +278,6 @@ const UPCDashboard: React.FC = () => {
     setEditingUPC("");
   };
 
-  const manualSync = async () => {
-    setIsSyncing(true);
-    setLastSyncTime(new Date());
-
-    // Force reload data using Supabase service
-    const currentData = await supabaseService.loadData();
-    if (currentData) {
-      setProducts(currentData.products);
-      const processed = processProductsWithUPC(currentData.products);
-      setProcessedProducts(processed);
-      setEditedProducts(currentData.editedProducts);
-    }
-
-    setTimeout(() => setIsSyncing(false), 1000);
-  };
-
-  const testApiConnection = async () => {
-    try {
-      const isAvailable = await supabaseService.isAvailable();
-      console.log("API connection test result:", isAvailable);
-      alert(`API Connection: ${isAvailable ? "SUCCESS" : "FAILED"}`);
-    } catch (error) {
-      console.error("API connection test error:", error);
-      alert("API Connection: FAILED - Check console for details");
-    }
-  };
-
   const stats = {
     total: processedProducts.filter(
       (p) =>
@@ -385,32 +315,6 @@ const UPCDashboard: React.FC = () => {
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
             Manage and update UPC codes for your Shopify products with ease
           </p>
-          {isSyncing && (
-            <div className="mt-4 inline-flex items-center px-4 py-2 bg-blue-100 text-blue-800 rounded-lg">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
-              Syncing changes from other browser...
-            </div>
-          )}
-
-          {/* Debug Section */}
-          <div className="mt-4 text-sm text-gray-500">
-            <button
-              onClick={manualSync}
-              className="inline-flex items-center px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded text-xs"
-            >
-              <RefreshCw className="h-3 w-3 mr-1" />
-              Manual Sync
-            </button>
-            <button
-              onClick={testApiConnection}
-              className="inline-flex items-center px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded text-xs ml-2"
-            >
-              Test API
-            </button>
-            <span className="ml-4">
-              Last sync: {lastSyncTime.toLocaleTimeString()}
-            </span>
-          </div>
         </div>
 
         {/* Stats Cards */}
@@ -469,17 +373,6 @@ const UPCDashboard: React.FC = () => {
           <div className="px-6 py-6">
             <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
               <div className="flex items-center space-x-4">
-                <label className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-3 rounded-xl flex items-center shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 cursor-pointer">
-                  <Upload className="h-5 w-5 mr-2" />
-                  {isLoading ? "Loading..." : "Upload CSV"}
-                  <input
-                    type="file"
-                    accept=".csv"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                    disabled={isLoading}
-                  />
-                </label>
                 <button
                   onClick={handleExport}
                   disabled={products.length === 0}
@@ -487,19 +380,6 @@ const UPCDashboard: React.FC = () => {
                 >
                   <Download className="h-5 w-5 mr-2" />
                   Export CSV
-                </button>
-                <button
-                  onClick={manualSync}
-                  disabled={isSyncing}
-                  className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 disabled:from-gray-400 disabled:to-gray-500 text-white px-6 py-3 rounded-xl flex items-center shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 disabled:transform-none"
-                  title={`Last sync: ${lastSyncTime.toLocaleTimeString()}`}
-                >
-                  <RefreshCw
-                    className={`h-5 w-5 mr-2 ${
-                      isSyncing ? "animate-spin" : ""
-                    }`}
-                  />
-                  {isSyncing ? "Syncing..." : "Sync Now"}
                 </button>
               </div>
 
@@ -676,7 +556,7 @@ const UPCDashboard: React.FC = () => {
                   {products.length === 0
                     ? isLoading
                       ? "Loading Grip6 product data..."
-                      : "Grip6 product data should load automatically. If not, use the Upload CSV button above."
+                      : "Grip6 product data should load automatically from the database."
                     : "No products match your current filters (test products with 'copy' in the handle, products without SKUs, and products that already have UPCs are automatically excluded, but edited products remain visible)"}
                 </p>
               </div>
