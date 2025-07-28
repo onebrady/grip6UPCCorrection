@@ -72,17 +72,25 @@ const UPCDashboard: React.FC = () => {
   const loadDefaultCSV = async () => {
     try {
       setIsLoading(true);
+      console.log("Loading default CSV from /products_export.csv");
       const response = await fetch("/products_export.csv");
+      console.log("CSV response status:", response.status);
       if (response.ok) {
         const csvText = await response.text();
+        console.log("CSV loaded, length:", csvText.length);
         const parsedProducts = parseCSV(csvText);
+        console.log("Parsed products count:", parsedProducts.length);
         setProducts(parsedProducts);
         const processed = processProductsWithUPC(parsedProducts);
+        console.log("Processed products count:", processed.length);
         setProcessedProducts(processed);
         setFilteredProducts(processed);
         saveToLocalStorage(parsedProducts);
       } else {
-        console.warn("Could not load default CSV file");
+        console.warn(
+          "Could not load default CSV file, status:",
+          response.status
+        );
       }
     } catch (error) {
       console.error("Error loading default CSV:", error);
@@ -94,20 +102,36 @@ const UPCDashboard: React.FC = () => {
   // Filter products based on search and filter criteria
   useEffect(() => {
     try {
+      console.log("Filtering products:", {
+        total: processedProducts.length,
+        filterMissing,
+        editedProductsSize: editedProducts.size,
+      });
+
       let filtered = processedProducts;
 
       // Filter out products with "copy" in the handle (test products)
+      const beforeCopyFilter = filtered.length;
       filtered = filtered.filter(
         (product) => !product.Handle.toLowerCase().includes("copy")
       );
+      console.log(
+        "After copy filter:",
+        beforeCopyFilter,
+        "->",
+        filtered.length
+      );
 
       // Filter out products without SKU
+      const beforeSKUFilter = filtered.length;
       filtered = filtered.filter(
         (product) =>
           product["Variant SKU"] && product["Variant SKU"].trim() !== ""
       );
+      console.log("After SKU filter:", beforeSKUFilter, "->", filtered.length);
 
       // Filter out products that already have UPCs (but keep ones edited in this session)
+      const beforeUPCFilter = filtered.length;
       filtered = filtered.filter((product) => {
         const hasUPC =
           product["Variant Barcode"] &&
@@ -119,11 +143,20 @@ const UPCDashboard: React.FC = () => {
         // Show if no UPC OR if this product was edited in this session
         return !hasUPC || editedProducts.has(productKey);
       });
+      console.log("After UPC filter:", beforeUPCFilter, "->", filtered.length);
 
       if (filterMissing) {
+        const beforeMissingFilter = filtered.length;
         filtered = filtered.filter((product) => product.upcMissing);
+        console.log(
+          "After missing filter:",
+          beforeMissingFilter,
+          "->",
+          filtered.length
+        );
       }
 
+      console.log("Final filtered count:", filtered.length);
       setFilteredProducts(filtered);
     } catch (error) {
       console.error("Error filtering products:", error);
@@ -177,25 +210,43 @@ const UPCDashboard: React.FC = () => {
   const saveEdit = async () => {
     if (!editingProduct || !editingSKU) return;
 
+    console.log("Saving edit:", {
+      product: editingProduct,
+      sku: editingSKU,
+      upc: editingUPC,
+    });
+
     try {
       const updatedProducts = products.map((product) => {
         if (
           product.Handle === editingProduct &&
           product["Variant SKU"] === editingSKU
         ) {
+          console.log(
+            "Updating product:",
+            product.Handle,
+            product["Variant SKU"]
+          );
           return { ...product, "Variant Barcode": editingUPC };
         }
         return product;
       });
 
+      console.log("Updated products count:", updatedProducts.length);
       setProducts(updatedProducts);
       const processed = processProductsWithUPC(updatedProducts);
+      console.log("Processed products count:", processed.length);
       setProcessedProducts(processed);
       saveToLocalStorage(updatedProducts);
 
       // Track that this product was edited
       const productKey = `${editingProduct}-${editingSKU}`;
-      setEditedProducts((prev) => new Set([...prev, productKey]));
+      console.log("Adding to edited products:", productKey);
+      setEditedProducts((prev) => {
+        const newSet = new Set([...prev, productKey]);
+        console.log("Edited products count:", newSet.size);
+        return newSet;
+      });
 
       // Save to server for multi-user collaboration
       try {

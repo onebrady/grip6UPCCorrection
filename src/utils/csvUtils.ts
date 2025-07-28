@@ -2,9 +2,16 @@ import Papa from "papaparse";
 import type { Product, ProductWithUPC } from "../types/product";
 
 export const parseCSV = (csvText: string): Product[] => {
+  console.log("Parsing CSV, text length:", csvText.length);
   const result = Papa.parse(csvText, {
     header: true,
     skipEmptyLines: true,
+  });
+
+  console.log("CSV parse result:", {
+    dataLength: result.data.length,
+    errors: result.errors,
+    meta: result.meta,
   });
 
   return result.data as Product[];
@@ -13,7 +20,9 @@ export const parseCSV = (csvText: string): Product[] => {
 export const processProductsWithUPC = (
   products: Product[]
 ): ProductWithUPC[] => {
-  return products.map((product) => ({
+  console.log("Processing products with UPC, count:", products.length);
+
+  const processed = products.map((product) => ({
     ...product,
     hasUPC: Boolean(
       product["Variant Barcode"] && product["Variant Barcode"].trim() !== ""
@@ -21,6 +30,17 @@ export const processProductsWithUPC = (
     upcMissing:
       !product["Variant Barcode"] || product["Variant Barcode"].trim() === "",
   }));
+
+  const withUPC = processed.filter((p) => p.hasUPC).length;
+  const missingUPC = processed.filter((p) => p.upcMissing).length;
+
+  console.log("Processed products stats:", {
+    total: processed.length,
+    withUPC,
+    missingUPC,
+  });
+
+  return processed;
 };
 
 export const exportToCSV = (products: Product[]): string => {
