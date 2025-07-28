@@ -83,10 +83,11 @@ src/
 ## 📊 Usage
 
 1. **Enter Password**: Use the password "grip6upc" to access the dashboard
-2. **Upload CSV**: Click "Upload CSV" to import your Shopify product export
-3. **Filter Products**: Use filters to find specific products
-4. **Edit UPCs**: Click the edit icon next to any UPC to modify it
-5. **Export Data**: Click "Export CSV" to download updated data
+2. **Data Loading**: Grip6 product data loads automatically on first visit
+3. **Upload CSV**: Click "Upload CSV" to import different Shopify product exports
+4. **Filter Products**: Use filters to find specific products
+5. **Edit UPCs**: Click the edit icon next to any UPC to modify it
+6. **Export Data**: Click "Export CSV" to download updated data
 
 ## 🎯 Key Features
 

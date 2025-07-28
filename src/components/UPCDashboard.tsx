@@ -49,7 +49,7 @@ const UPCDashboard: React.FC = () => {
     [products]
   );
 
-  // Load data from localStorage on component mount
+  // Load data from localStorage or default CSV on component mount
   useEffect(() => {
     try {
       const savedData = loadFromLocalStorage();
@@ -58,11 +58,38 @@ const UPCDashboard: React.FC = () => {
         const processed = processProductsWithUPC(savedData);
         setProcessedProducts(processed);
         setFilteredProducts(processed);
+      } else {
+        // Load default CSV if no saved data
+        loadDefaultCSV();
       }
     } catch (error) {
       console.error("Error loading from localStorage:", error);
+      // Try to load default CSV as fallback
+      loadDefaultCSV();
     }
   }, []);
+
+  const loadDefaultCSV = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch("/products_export.csv");
+      if (response.ok) {
+        const csvText = await response.text();
+        const parsedProducts = parseCSV(csvText);
+        setProducts(parsedProducts);
+        const processed = processProductsWithUPC(parsedProducts);
+        setProcessedProducts(processed);
+        setFilteredProducts(processed);
+        saveToLocalStorage(parsedProducts);
+      } else {
+        console.warn("Could not load default CSV file");
+      }
+    } catch (error) {
+      console.error("Error loading default CSV:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Filter products based on search and filter criteria
   useEffect(() => {
@@ -486,7 +513,9 @@ const UPCDashboard: React.FC = () => {
                 </h3>
                 <p className="text-gray-500">
                   {products.length === 0
-                    ? "Upload a Shopify product export CSV to get started with UPC management"
+                    ? isLoading
+                      ? "Loading Grip6 product data..."
+                      : "Grip6 product data should load automatically. If not, use the Upload CSV button above."
                     : "No products match your current filters (test products with 'copy' in the handle, products without SKUs, and products that already have UPCs are automatically excluded, but edited products remain visible)"}
                 </p>
               </div>
