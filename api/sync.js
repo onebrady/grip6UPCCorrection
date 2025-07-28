@@ -22,20 +22,33 @@ if (!fs.existsSync(DATA_FILE)) {
 }
 
 module.exports = function handler(req, res) {
+  console.log("API request received:", {
+    method: req.method,
+    url: req.url,
+    headers: req.headers,
+  });
+
   // Enable CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
   if (req.method === "OPTIONS") {
+    console.log("Handling OPTIONS request");
     res.status(200).end();
     return;
   }
 
   try {
     if (req.method === "GET") {
+      console.log("Handling GET request");
       // Read current data
       const data = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
+      console.log("Returning data:", {
+        productsCount: data.products?.length || 0,
+        editedProductsCount: data.editedProducts?.length || 0,
+        lastUpdated: data.lastUpdated,
+      });
       res.status(200).json({
         success: true,
         data: {
@@ -45,8 +58,13 @@ module.exports = function handler(req, res) {
         },
       });
     } else if (req.method === "POST") {
+      console.log("Handling POST request");
       // Update data
       const { products, editedProducts } = req.body;
+      console.log("Received data:", {
+        productsCount: products?.length || 0,
+        editedProductsCount: editedProducts?.length || 0,
+      });
 
       const newData = {
         products: products || [],
@@ -55,12 +73,14 @@ module.exports = function handler(req, res) {
       };
 
       fs.writeFileSync(DATA_FILE, JSON.stringify(newData, null, 2));
+      console.log("Data saved successfully");
 
       res.status(200).json({
         success: true,
         message: "Data updated successfully",
       });
     } else {
+      console.log("Method not allowed:", req.method);
       res.status(405).json({ success: false, error: "Method not allowed" });
     }
   } catch (error) {

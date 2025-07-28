@@ -9,6 +9,7 @@ class ServerlessSyncService {
   constructor() {
     // Use the deployed API URL or fallback to local development
     this.apiUrl = import.meta.env.VITE_API_URL || "/api/sync";
+    console.log("ServerlessSyncService initialized with API URL:", this.apiUrl);
   }
 
   // Save data to server
@@ -17,6 +18,11 @@ class ServerlessSyncService {
     editedProducts: Set<string>
   ): Promise<boolean> {
     try {
+      console.log("Saving data to server:", this.apiUrl, {
+        productsCount: products.length,
+        editedProductsCount: editedProducts.size,
+      });
+
       const response = await fetch(this.apiUrl, {
         method: "POST",
         headers: {
@@ -28,11 +34,16 @@ class ServerlessSyncService {
         }),
       });
 
+      console.log("Server response status:", response.status);
+
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Server error response:", errorText);
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const result = await response.json();
+      console.log("Server response:", result);
       return result.success;
     } catch (error) {
       console.error("Error saving data to server:", error);
@@ -46,13 +57,20 @@ class ServerlessSyncService {
     editedProducts: Set<string>;
   } | null> {
     try {
+      console.log("Loading data from server:", this.apiUrl);
+
       const response = await fetch(this.apiUrl);
 
+      console.log("Load response status:", response.status);
+
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Load error response:", errorText);
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const result = await response.json();
+      console.log("Load response:", result);
 
       if (result.success && result.data) {
         return {
@@ -77,6 +95,7 @@ class ServerlessSyncService {
   ): void {
     if (this.isPolling) return;
 
+    console.log("Starting sync polling...");
     this.isPolling = true;
 
     const poll = async () => {
@@ -92,6 +111,7 @@ class ServerlessSyncService {
 
               // Only trigger change if data is newer and from different session
               if (serverLastUpdated > this.lastSyncTime) {
+                console.log("Data changed, triggering sync update");
                 this.lastSyncTime = serverLastUpdated;
                 onDataChange(currentData);
               }
@@ -117,6 +137,7 @@ class ServerlessSyncService {
       this.syncInterval = null;
     }
     this.isPolling = false;
+    console.log("Stopped sync polling");
   }
 
   // Force a sync by updating data on server
@@ -124,6 +145,7 @@ class ServerlessSyncService {
     products: Product[],
     editedProducts: Set<string>
   ): Promise<boolean> {
+    console.log("Force syncing data...");
     this.lastSyncTime = Date.now();
     return await this.saveData(products, editedProducts);
   }
@@ -132,8 +154,11 @@ class ServerlessSyncService {
   async isServerAvailable(): Promise<boolean> {
     try {
       const response = await fetch(this.apiUrl);
-      return response.ok;
-    } catch {
+      const isAvailable = response.ok;
+      console.log("Server availability check:", isAvailable);
+      return isAvailable;
+    } catch (error) {
+      console.error("Server availability check failed:", error);
       return false;
     }
   }

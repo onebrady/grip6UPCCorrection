@@ -17,7 +17,6 @@ import {
   parseCSV,
 } from "../utils/csvUtils";
 import { serverlessSyncService } from "../utils/serverlessSyncService";
-import { apiService } from "../utils/apiService";
 
 const UPCDashboard: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -282,28 +281,18 @@ const UPCDashboard: React.FC = () => {
         const newSet = new Set([...prev, productKey]);
         console.log("Edited products count:", newSet.size);
 
-        // Use new sync service to save data
+        // Use serverless sync service to save data
         serverlessSyncService
           .forceSync(updatedProducts, newSet)
-          .catch(console.error);
+          .then((success) => {
+            console.log("Sync save result:", success);
+          })
+          .catch((error) => {
+            console.error("Sync save error:", error);
+          });
 
         return newSet;
       });
-
-      // Save to server for multi-user collaboration
-      try {
-        const result = await apiService.updateProductUPC(
-          editingProduct,
-          editingSKU!,
-          editingUPC
-        );
-        if (!result.success) {
-          console.warn("Failed to save to server:", result.error);
-        }
-      } catch (error) {
-        console.error("Error saving to server:", error);
-        // Continue with local save even if server save fails
-      }
 
       setEditingProduct(null);
       setEditingSKU(null);
@@ -333,6 +322,17 @@ const UPCDashboard: React.FC = () => {
     }
 
     setTimeout(() => setIsSyncing(false), 1000);
+  };
+
+  const testApiConnection = async () => {
+    try {
+      const isAvailable = await serverlessSyncService.isServerAvailable();
+      console.log("API connection test result:", isAvailable);
+      alert(`API Connection: ${isAvailable ? "SUCCESS" : "FAILED"}`);
+    } catch (error) {
+      console.error("API connection test error:", error);
+      alert("API Connection: FAILED - Check console for details");
+    }
   };
 
   const stats = {
@@ -378,6 +378,26 @@ const UPCDashboard: React.FC = () => {
               Syncing changes from other browser...
             </div>
           )}
+
+          {/* Debug Section */}
+          <div className="mt-4 text-sm text-gray-500">
+            <button
+              onClick={manualSync}
+              className="inline-flex items-center px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded text-xs"
+            >
+              <RefreshCw className="h-3 w-3 mr-1" />
+              Manual Sync
+            </button>
+            <button
+              onClick={testApiConnection}
+              className="inline-flex items-center px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded text-xs ml-2"
+            >
+              Test API
+            </button>
+            <span className="ml-4">
+              Last sync: {lastSyncTime.toLocaleTimeString()}
+            </span>
+          </div>
         </div>
 
         {/* Stats Cards */}
