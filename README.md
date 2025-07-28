@@ -20,6 +20,7 @@ vercel
 
 ## ✨ Features
 
+- **🔐 Password Protection**: Simple password gate to protect sensitive pricing data
 - **📊 CSV Import/Export**: Upload Shopify product exports and export updated data
 - **🔍 Smart Filtering**: Filter out test products and products without SKUs
 - **✏️ UPC Editing**: Easy inline editing of UPC codes with validation
@@ -81,10 +82,11 @@ src/
 
 ## 📊 Usage
 
-1. **Upload CSV**: Click "Upload CSV" to import your Shopify product export
-2. **Filter Products**: Use search and filters to find specific products
-3. **Edit UPCs**: Click the edit icon next to any UPC to modify it
-4. **Export Data**: Click "Export CSV" to download updated data
+1. **Enter Password**: Use the password "grip6upc" to access the dashboard
+2. **Load CSV**: Import your Shopify product export
+3. **Filter Products**: Use filters to find specific products
+4. **Edit UPCs**: Click the edit icon next to any UPC to modify it
+5. **Export Data**: Click "Export CSV" to download updated data
 
 ## 🎯 Key Features
 

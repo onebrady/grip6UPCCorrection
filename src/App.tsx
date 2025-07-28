@@ -1,5 +1,6 @@
 import React from "react";
 import UPCDashboard from "./components/UPCDashboard";
+import PasswordGate from "./components/PasswordGate";
 
 // Error boundary component
 class ErrorBoundary extends React.Component<
@@ -39,7 +40,9 @@ class ErrorBoundary extends React.Component<
 function App() {
   return (
     <ErrorBoundary>
-      <UPCDashboard />
+      <PasswordGate>
+        <UPCDashboard />
+      </PasswordGate>
     </ErrorBoundary>
   );
 }
