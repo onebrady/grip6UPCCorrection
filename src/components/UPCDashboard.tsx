@@ -110,7 +110,7 @@ const UPCDashboard: React.FC = () => {
         const processed = processProductsWithUPC(parsedProducts);
         console.log("Processed products count:", processed.length);
         setProcessedProducts(processed);
-        setFilteredProducts(processed);
+        // Don't set filteredProducts here - let the filter useEffect handle it
         saveToLocalStorage(parsedProducts);
       } else {
         console.warn(
