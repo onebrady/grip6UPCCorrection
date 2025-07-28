@@ -16,7 +16,7 @@ import {
   downloadCSV,
   parseCSV,
 } from "../utils/csvUtils";
-import { syncService } from "../utils/syncService";
+import { serverlessSyncService } from "../utils/serverlessSyncService";
 import { apiService } from "../utils/apiService";
 
 const UPCDashboard: React.FC = () => {
@@ -51,28 +51,32 @@ const UPCDashboard: React.FC = () => {
     [products]
   );
 
-  // Load data from localStorage or default CSV on component mount
+  // Load data from server or default CSV on component mount
   useEffect(() => {
-    try {
-      const savedData = syncService.loadData();
-      if (savedData) {
-        setProducts(savedData.products);
-        const processed = processProductsWithUPC(savedData.products);
-        setProcessedProducts(processed);
-        setEditedProducts(savedData.editedProducts);
-        // Don't set filteredProducts here - let the filter useEffect handle it
-      } else {
-        // Load default CSV if no saved data
+    const loadInitialData = async () => {
+      try {
+        const savedData = await serverlessSyncService.loadData();
+        if (savedData && savedData.products.length > 0) {
+          setProducts(savedData.products);
+          const processed = processProductsWithUPC(savedData.products);
+          setProcessedProducts(processed);
+          setEditedProducts(savedData.editedProducts);
+          // Don't set filteredProducts here - let the filter useEffect handle it
+        } else {
+          // Load default CSV if no saved data
+          loadDefaultCSV();
+        }
+      } catch (error) {
+        console.error("Error loading from server:", error);
+        // Try to load default CSV as fallback
         loadDefaultCSV();
       }
-    } catch (error) {
-      console.error("Error loading from localStorage:", error);
-      // Try to load default CSV as fallback
-      loadDefaultCSV();
-    }
+    };
+
+    loadInitialData();
   }, []);
 
-  // Real-time sync with other browser windows using new sync service
+  // Real-time sync with other browser windows using serverless sync service
   useEffect(() => {
     const handleDataChange = (data: {
       products: Product[];
@@ -88,12 +92,12 @@ const UPCDashboard: React.FC = () => {
       setTimeout(() => setIsSyncing(false), 500);
     };
 
-    // Start polling for changes
-    syncService.startPolling(handleDataChange);
+    // Start polling for changes every 5 seconds
+    serverlessSyncService.startPolling(handleDataChange);
 
     // Cleanup on unmount
     return () => {
-      syncService.stopPolling();
+      serverlessSyncService.stopPolling();
     };
   }, []);
 
@@ -122,7 +126,7 @@ const UPCDashboard: React.FC = () => {
         console.log("Processed products count:", processed.length);
         setProcessedProducts(processed);
         // Don't set filteredProducts here - let the filter useEffect handle it
-        syncService.forceSync(parsedProducts, new Set());
+        await serverlessSyncService.forceSync(parsedProducts, new Set());
       } else {
         console.warn(
           "Could not load default CSV file, status:",
@@ -203,7 +207,7 @@ const UPCDashboard: React.FC = () => {
 
     setIsLoading(true);
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const csvText = e.target?.result as string;
         const parsedProducts = parseCSV(csvText);
@@ -211,7 +215,7 @@ const UPCDashboard: React.FC = () => {
         const processed = processProductsWithUPC(parsedProducts);
         setProcessedProducts(processed);
         // Don't set filteredProducts here - let the filter useEffect handle it
-        syncService.forceSync(parsedProducts, new Set());
+        await serverlessSyncService.forceSync(parsedProducts, new Set());
       } catch (error) {
         console.error("Error parsing CSV:", error);
       } finally {
@@ -279,7 +283,9 @@ const UPCDashboard: React.FC = () => {
         console.log("Edited products count:", newSet.size);
 
         // Use new sync service to save data
-        syncService.forceSync(updatedProducts, newSet);
+        serverlessSyncService
+          .forceSync(updatedProducts, newSet)
+          .catch(console.error);
 
         return newSet;
       });
@@ -313,12 +319,12 @@ const UPCDashboard: React.FC = () => {
     setEditingUPC("");
   };
 
-  const manualSync = () => {
+  const manualSync = async () => {
     setIsSyncing(true);
     setLastSyncTime(new Date());
 
     // Force reload data using sync service
-    const currentData = syncService.loadData();
+    const currentData = await serverlessSyncService.loadData();
     if (currentData) {
       setProducts(currentData.products);
       const processed = processProductsWithUPC(currentData.products);
