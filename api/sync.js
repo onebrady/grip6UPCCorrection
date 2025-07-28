@@ -1,5 +1,5 @@
-import fs from "fs";
-import path from "path";
+const fs = require("fs");
+const path = require("path");
 
 const DATA_FILE = path.join(process.cwd(), "data", "sync-data.json");
 
@@ -21,7 +21,7 @@ if (!fs.existsSync(DATA_FILE)) {
   );
 }
 
-export default function handler(req, res) {
+module.exports = function handler(req, res) {
   // Enable CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -71,4 +71,4 @@ export default function handler(req, res) {
       details: error.message,
     });
   }
-}
+};
