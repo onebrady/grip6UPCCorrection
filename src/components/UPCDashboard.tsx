@@ -6,6 +6,7 @@ import {
   Edit3,
   Save,
   X,
+  Upload,
 } from "lucide-react";
 import type { Product, ProductWithUPC } from "../types/product";
 import {
@@ -14,6 +15,7 @@ import {
   downloadCSV,
   saveToLocalStorage,
   loadFromLocalStorage,
+  parseCSV,
 } from "../utils/csvUtils";
 import { apiService } from "../utils/apiService";
 
@@ -30,6 +32,7 @@ const UPCDashboard: React.FC = () => {
   const [editingSKU, setEditingSKU] = useState<string | null>(null);
   const [editingUPC, setEditingUPC] = useState("");
   const [editedProducts, setEditedProducts] = useState<Set<string>>(new Set());
+  const [isLoading, setIsLoading] = useState(false);
 
   // Helper function to get the correct title for a product handle
   const getProductTitle = useCallback(
@@ -100,6 +103,30 @@ const UPCDashboard: React.FC = () => {
       setFilteredProducts([]);
     }
   }, [processedProducts, filterMissing, editedProducts]);
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsLoading(true);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const csvText = e.target?.result as string;
+        const parsedProducts = parseCSV(csvText);
+        setProducts(parsedProducts);
+        const processed = processProductsWithUPC(parsedProducts);
+        setProcessedProducts(processed);
+        setFilteredProducts(processed);
+        saveToLocalStorage(parsedProducts);
+      } catch (error) {
+        console.error("Error parsing CSV:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    reader.readAsText(file);
+  };
 
   const handleExport = () => {
     try {
@@ -267,6 +294,17 @@ const UPCDashboard: React.FC = () => {
           <div className="px-6 py-6">
             <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
               <div className="flex items-center space-x-4">
+                <label className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-6 py-3 rounded-xl flex items-center shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 cursor-pointer">
+                  <Upload className="h-5 w-5 mr-2" />
+                  {isLoading ? "Loading..." : "Upload CSV"}
+                  <input
+                    type="file"
+                    accept=".csv"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                    disabled={isLoading}
+                  />
+                </label>
                 <button
                   onClick={handleExport}
                   disabled={products.length === 0}
@@ -448,7 +486,7 @@ const UPCDashboard: React.FC = () => {
                 </h3>
                 <p className="text-gray-500">
                   {products.length === 0
-                    ? "Load a CSV file to get started with UPC management"
+                    ? "Upload a Shopify product export CSV to get started with UPC management"
                     : "No products match your current filters (test products with 'copy' in the handle, products without SKUs, and products that already have UPCs are automatically excluded, but edited products remain visible)"}
                 </p>
               </div>

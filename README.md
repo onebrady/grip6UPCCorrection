@@ -83,7 +83,7 @@ src/
 ## 📊 Usage
 
 1. **Enter Password**: Use the password "grip6upc" to access the dashboard
-2. **Load CSV**: Import your Shopify product export
+2. **Upload CSV**: Click "Upload CSV" to import your Shopify product export
 3. **Filter Products**: Use filters to find specific products
 4. **Edit UPCs**: Click the edit icon next to any UPC to modify it
 5. **Export Data**: Click "Export CSV" to download updated data
