@@ -14,10 +14,9 @@ import {
   processProductsWithUPC,
   exportToCSV,
   downloadCSV,
-  saveToLocalStorage,
-  loadFromLocalStorage,
   parseCSV,
 } from "../utils/csvUtils";
+import { syncService } from "../utils/syncService";
 import { apiService } from "../utils/apiService";
 
 const UPCDashboard: React.FC = () => {
@@ -55,28 +54,16 @@ const UPCDashboard: React.FC = () => {
   // Load data from localStorage or default CSV on component mount
   useEffect(() => {
     try {
-      const savedData = loadFromLocalStorage();
+      const savedData = syncService.loadData();
       if (savedData) {
-        setProducts(savedData);
-        const processed = processProductsWithUPC(savedData);
+        setProducts(savedData.products);
+        const processed = processProductsWithUPC(savedData.products);
         setProcessedProducts(processed);
+        setEditedProducts(savedData.editedProducts);
         // Don't set filteredProducts here - let the filter useEffect handle it
       } else {
         // Load default CSV if no saved data
         loadDefaultCSV();
-      }
-
-      // Load edited products from localStorage
-      const savedEditedProducts = localStorage.getItem(
-        "upc-dashboard-edited-products"
-      );
-      if (savedEditedProducts) {
-        try {
-          const editedProductsArray = JSON.parse(savedEditedProducts);
-          setEditedProducts(new Set(editedProductsArray));
-        } catch (error) {
-          console.error("Error loading edited products:", error);
-        }
       }
     } catch (error) {
       console.error("Error loading from localStorage:", error);
@@ -85,52 +72,30 @@ const UPCDashboard: React.FC = () => {
     }
   }, []);
 
-  // Real-time sync with other browser windows using polling
+  // Real-time sync with other browser windows using new sync service
   useEffect(() => {
-    const syncData = () => {
-      try {
-        const currentData = localStorage.getItem("upc-dashboard-data");
-        const currentEditedProducts = localStorage.getItem(
-          "upc-dashboard-edited-products"
-        );
+    const handleDataChange = (data: {
+      products: Product[];
+      editedProducts: Set<string>;
+    }) => {
+      setIsSyncing(true);
+      setProducts(data.products);
+      const processed = processProductsWithUPC(data.products);
+      setProcessedProducts(processed);
+      setEditedProducts(data.editedProducts);
 
-        if (currentData) {
-          const newData = JSON.parse(currentData);
-          // Only update if data has actually changed
-          if (JSON.stringify(newData) !== JSON.stringify(products)) {
-            setIsSyncing(true);
-            setProducts(newData);
-            const processed = processProductsWithUPC(newData);
-            setProcessedProducts(processed);
-
-            // Show sync indicator briefly
-            setTimeout(() => setIsSyncing(false), 500);
-          }
-        }
-
-        if (currentEditedProducts) {
-          try {
-            const newEditedProducts = JSON.parse(currentEditedProducts);
-            setEditedProducts(new Set(newEditedProducts));
-          } catch (error) {
-            console.error("Error parsing synced edited products:", error);
-          }
-        }
-      } catch (error) {
-        console.error("Error during sync:", error);
-      }
+      // Show sync indicator briefly
+      setTimeout(() => setIsSyncing(false), 500);
     };
 
-    // Initial sync
-    syncData();
+    // Start polling for changes
+    syncService.startPolling(handleDataChange);
 
-    // Set up polling every 2 seconds
-    const syncInterval = setInterval(syncData, 2000);
-
+    // Cleanup on unmount
     return () => {
-      clearInterval(syncInterval);
+      syncService.stopPolling();
     };
-  }, [products]);
+  }, []);
 
   const loadDefaultCSV = async () => {
     try {
@@ -157,7 +122,7 @@ const UPCDashboard: React.FC = () => {
         console.log("Processed products count:", processed.length);
         setProcessedProducts(processed);
         // Don't set filteredProducts here - let the filter useEffect handle it
-        saveToLocalStorage(parsedProducts);
+        syncService.forceSync(parsedProducts, new Set());
       } else {
         console.warn(
           "Could not load default CSV file, status:",
@@ -246,7 +211,7 @@ const UPCDashboard: React.FC = () => {
         const processed = processProductsWithUPC(parsedProducts);
         setProcessedProducts(processed);
         // Don't set filteredProducts here - let the filter useEffect handle it
-        saveToLocalStorage(parsedProducts);
+        syncService.forceSync(parsedProducts, new Set());
       } catch (error) {
         console.error("Error parsing CSV:", error);
       } finally {
@@ -305,7 +270,6 @@ const UPCDashboard: React.FC = () => {
       const processed = processProductsWithUPC(updatedProducts);
       console.log("Processed products count:", processed.length);
       setProcessedProducts(processed);
-      saveToLocalStorage(updatedProducts);
 
       // Track that this product was edited
       const productKey = `${editingProduct}-${editingSKU}`;
@@ -314,11 +278,8 @@ const UPCDashboard: React.FC = () => {
         const newSet = new Set([...prev, productKey]);
         console.log("Edited products count:", newSet.size);
 
-        // Sync edited products across browser windows
-        localStorage.setItem(
-          "upc-dashboard-edited-products",
-          JSON.stringify([...newSet])
-        );
+        // Use new sync service to save data
+        syncService.forceSync(updatedProducts, newSet);
 
         return newSet;
       });
@@ -356,33 +317,13 @@ const UPCDashboard: React.FC = () => {
     setIsSyncing(true);
     setLastSyncTime(new Date());
 
-    // Force reload data from localStorage
-    const currentData = localStorage.getItem("upc-dashboard-data");
-    const currentEditedProducts = localStorage.getItem(
-      "upc-dashboard-edited-products"
-    );
-
+    // Force reload data using sync service
+    const currentData = syncService.loadData();
     if (currentData) {
-      try {
-        const newData = JSON.parse(currentData);
-        setProducts(newData);
-        const processed = processProductsWithUPC(newData);
-        setProcessedProducts(processed);
-      } catch (error) {
-        console.error("Error during manual sync:", error);
-      }
-    }
-
-    if (currentEditedProducts) {
-      try {
-        const newEditedProducts = JSON.parse(currentEditedProducts);
-        setEditedProducts(new Set(newEditedProducts));
-      } catch (error) {
-        console.error(
-          "Error parsing edited products during manual sync:",
-          error
-        );
-      }
+      setProducts(currentData.products);
+      const processed = processProductsWithUPC(currentData.products);
+      setProcessedProducts(processed);
+      setEditedProducts(currentData.editedProducts);
     }
 
     setTimeout(() => setIsSyncing(false), 1000);
