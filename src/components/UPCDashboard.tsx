@@ -16,7 +16,7 @@ import {
   downloadCSV,
   parseCSV,
 } from "../utils/csvUtils";
-import { serverlessSyncService } from "../utils/serverlessSyncService";
+import { supabaseService } from "../utils/supabaseService";
 
 const UPCDashboard: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -54,7 +54,7 @@ const UPCDashboard: React.FC = () => {
   useEffect(() => {
     const loadInitialData = async () => {
       try {
-        const savedData = await serverlessSyncService.loadData();
+        const savedData = await supabaseService.loadData();
         if (savedData && savedData.products.length > 0) {
           setProducts(savedData.products);
           const processed = processProductsWithUPC(savedData.products);
@@ -92,11 +92,24 @@ const UPCDashboard: React.FC = () => {
     };
 
     // Start polling for changes every 5 seconds
-    serverlessSyncService.startPolling(handleDataChange);
+    const pollInterval = setInterval(async () => {
+      try {
+        const currentData = await supabaseService.loadData();
+        if (currentData) {
+          const lastUpdated = await supabaseService.getLastUpdated();
+          if (lastUpdated > lastSyncTime.getTime()) {
+            setLastSyncTime(new Date(lastUpdated));
+            handleDataChange(currentData);
+          }
+        }
+      } catch (error) {
+        console.error("Error during sync polling:", error);
+      }
+    }, 5000);
 
     // Cleanup on unmount
     return () => {
-      serverlessSyncService.stopPolling();
+      clearInterval(pollInterval);
     };
   }, []);
 
@@ -125,7 +138,7 @@ const UPCDashboard: React.FC = () => {
         console.log("Processed products count:", processed.length);
         setProcessedProducts(processed);
         // Don't set filteredProducts here - let the filter useEffect handle it
-        await serverlessSyncService.forceSync(parsedProducts, new Set());
+        await supabaseService.saveData(parsedProducts, new Set());
       } else {
         console.warn(
           "Could not load default CSV file, status:",
@@ -214,7 +227,7 @@ const UPCDashboard: React.FC = () => {
         const processed = processProductsWithUPC(parsedProducts);
         setProcessedProducts(processed);
         // Don't set filteredProducts here - let the filter useEffect handle it
-        await serverlessSyncService.forceSync(parsedProducts, new Set());
+        await supabaseService.saveData(parsedProducts, new Set());
       } catch (error) {
         console.error("Error parsing CSV:", error);
       } finally {
@@ -281,13 +294,13 @@ const UPCDashboard: React.FC = () => {
         const newSet = new Set([...prev, productKey]);
         console.log("Edited products count:", newSet.size);
 
-        // Use serverless sync service to save data
-        serverlessSyncService
-          .forceSync(updatedProducts, newSet)
-          .then((success) => {
+        // Use Supabase service to save data
+        supabaseService
+          .saveData(updatedProducts, newSet)
+          .then((success: boolean) => {
             console.log("Sync save result:", success);
           })
-          .catch((error) => {
+          .catch((error: unknown) => {
             console.error("Sync save error:", error);
           });
 
@@ -312,8 +325,8 @@ const UPCDashboard: React.FC = () => {
     setIsSyncing(true);
     setLastSyncTime(new Date());
 
-    // Force reload data using sync service
-    const currentData = await serverlessSyncService.loadData();
+    // Force reload data using Supabase service
+    const currentData = await supabaseService.loadData();
     if (currentData) {
       setProducts(currentData.products);
       const processed = processProductsWithUPC(currentData.products);
@@ -326,7 +339,7 @@ const UPCDashboard: React.FC = () => {
 
   const testApiConnection = async () => {
     try {
-      const isAvailable = await serverlessSyncService.isServerAvailable();
+      const isAvailable = await supabaseService.isAvailable();
       console.log("API connection test result:", isAvailable);
       alert(`API Connection: ${isAvailable ? "SUCCESS" : "FAILED"}`);
     } catch (error) {

@@ -54,16 +54,27 @@ src/
 
 ## 🚀 Deployment
 
+### Prerequisites
+
+Before deploying, you need to set up Supabase for persistent data storage:
+
+1. **Follow the [Supabase Setup Guide](SUPABASE_SETUP.md)**
+2. **Set environment variables** in your deployment platform
+
 ### Vercel (Recommended)
 
-1. Install Vercel CLI: `npm install -g vercel`
-2. Deploy: `vercel`
-3. Your app will be live at a Vercel URL
+1. **Set up Supabase** following the guide above
+2. **Install Vercel CLI:** `npm install -g vercel`
+3. **Add environment variables** in Vercel dashboard:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+4. **Deploy:** `vercel`
+5. **Your app will be live** at a Vercel URL
 
 ### Other Platforms
 
-- **Netlify**: Connect your GitHub repo
-- **GitHub Pages**: Use the `gh-pages` branch
+- **Netlify**: Connect your GitHub repo and add environment variables
+- **GitHub Pages**: Use the `gh-pages` branch (limited functionality without server)
 - **Any static hosting**: Build with `npm run build`
 
 ## 🔧 Configuration
