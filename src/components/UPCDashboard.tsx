@@ -7,6 +7,7 @@ import {
   Save,
   X,
   Upload,
+  RefreshCw,
 } from "lucide-react";
 import type { Product, ProductWithUPC } from "../types/product";
 import {
@@ -34,6 +35,7 @@ const UPCDashboard: React.FC = () => {
   const [editedProducts, setEditedProducts] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
 
   // Helper function to get the correct title for a product handle
   const getProductTitle = useCallback(
@@ -83,46 +85,67 @@ const UPCDashboard: React.FC = () => {
     }
   }, []);
 
-  // Real-time sync with other browser windows
+  // Real-time sync with other browser windows using polling
   useEffect(() => {
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === "upc-dashboard-data" && e.newValue) {
-        try {
-          setIsSyncing(true);
-          const newData = JSON.parse(e.newValue);
-          setProducts(newData);
-          const processed = processProductsWithUPC(newData);
-          setProcessedProducts(processed);
-          // Don't set filteredProducts here - let the filter useEffect handle it
+    const syncData = () => {
+      try {
+        const currentData = localStorage.getItem("upc-dashboard-data");
+        const currentEditedProducts = localStorage.getItem(
+          "upc-dashboard-edited-products"
+        );
 
-          // Show sync indicator briefly
-          setTimeout(() => setIsSyncing(false), 1000);
-        } catch (error) {
-          console.error("Error parsing synced data:", error);
-          setIsSyncing(false);
-        }
-      }
+        if (currentData) {
+          const newData = JSON.parse(currentData);
+          // Only update if data has actually changed
+          if (JSON.stringify(newData) !== JSON.stringify(products)) {
+            setIsSyncing(true);
+            setProducts(newData);
+            const processed = processProductsWithUPC(newData);
+            setProcessedProducts(processed);
 
-      // Sync edited products across browsers
-      if (e.key === "upc-dashboard-edited-products" && e.newValue) {
-        try {
-          const newEditedProducts = JSON.parse(e.newValue);
-          setEditedProducts(new Set(newEditedProducts));
-        } catch (error) {
-          console.error("Error parsing synced edited products:", error);
+            // Show sync indicator briefly
+            setTimeout(() => setIsSyncing(false), 500);
+          }
         }
+
+        if (currentEditedProducts) {
+          try {
+            const newEditedProducts = JSON.parse(currentEditedProducts);
+            setEditedProducts(new Set(newEditedProducts));
+          } catch (error) {
+            console.error("Error parsing synced edited products:", error);
+          }
+        }
+      } catch (error) {
+        console.error("Error during sync:", error);
       }
     };
 
-    window.addEventListener("storage", handleStorageChange);
-    return () => window.removeEventListener("storage", handleStorageChange);
-  }, []);
+    // Initial sync
+    syncData();
+
+    // Set up polling every 2 seconds
+    const syncInterval = setInterval(syncData, 2000);
+
+    return () => {
+      clearInterval(syncInterval);
+    };
+  }, [products]);
 
   const loadDefaultCSV = async () => {
     try {
       setIsLoading(true);
       console.log("Loading default CSV from /products_export.csv");
-      const response = await fetch("/products_export.csv");
+
+      // Clear any cached data and force fresh fetch
+      const response = await fetch("/products_export.csv", {
+        cache: "no-cache",
+        headers: {
+          "Cache-Control": "no-cache",
+          Pragma: "no-cache",
+        },
+      });
+
       console.log("CSV response status:", response.status);
       if (response.ok) {
         const csvText = await response.text();
@@ -284,15 +307,6 @@ const UPCDashboard: React.FC = () => {
       setProcessedProducts(processed);
       saveToLocalStorage(updatedProducts);
 
-      // Trigger storage event for real-time sync across browser windows
-      window.dispatchEvent(
-        new StorageEvent("storage", {
-          key: "upc-dashboard-data",
-          newValue: JSON.stringify(updatedProducts),
-          oldValue: JSON.stringify(products),
-        })
-      );
-
       // Track that this product was edited
       const productKey = `${editingProduct}-${editingSKU}`;
       console.log("Adding to edited products:", productKey);
@@ -304,12 +318,6 @@ const UPCDashboard: React.FC = () => {
         localStorage.setItem(
           "upc-dashboard-edited-products",
           JSON.stringify([...newSet])
-        );
-        window.dispatchEvent(
-          new StorageEvent("storage", {
-            key: "upc-dashboard-edited-products",
-            newValue: JSON.stringify([...newSet]),
-          })
         );
 
         return newSet;
@@ -342,6 +350,42 @@ const UPCDashboard: React.FC = () => {
     setEditingProduct(null);
     setEditingSKU(null);
     setEditingUPC("");
+  };
+
+  const manualSync = () => {
+    setIsSyncing(true);
+    setLastSyncTime(new Date());
+
+    // Force reload data from localStorage
+    const currentData = localStorage.getItem("upc-dashboard-data");
+    const currentEditedProducts = localStorage.getItem(
+      "upc-dashboard-edited-products"
+    );
+
+    if (currentData) {
+      try {
+        const newData = JSON.parse(currentData);
+        setProducts(newData);
+        const processed = processProductsWithUPC(newData);
+        setProcessedProducts(processed);
+      } catch (error) {
+        console.error("Error during manual sync:", error);
+      }
+    }
+
+    if (currentEditedProducts) {
+      try {
+        const newEditedProducts = JSON.parse(currentEditedProducts);
+        setEditedProducts(new Set(newEditedProducts));
+      } catch (error) {
+        console.error(
+          "Error parsing edited products during manual sync:",
+          error
+        );
+      }
+    }
+
+    setTimeout(() => setIsSyncing(false), 1000);
   };
 
   const stats = {
@@ -463,6 +507,19 @@ const UPCDashboard: React.FC = () => {
                 >
                   <Download className="h-5 w-5 mr-2" />
                   Export CSV
+                </button>
+                <button
+                  onClick={manualSync}
+                  disabled={isSyncing}
+                  className="bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 disabled:from-gray-400 disabled:to-gray-500 text-white px-6 py-3 rounded-xl flex items-center shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 disabled:transform-none"
+                  title={`Last sync: ${lastSyncTime.toLocaleTimeString()}`}
+                >
+                  <RefreshCw
+                    className={`h-5 w-5 mr-2 ${
+                      isSyncing ? "animate-spin" : ""
+                    }`}
+                  />
+                  {isSyncing ? "Syncing..." : "Sync Now"}
                 </button>
               </div>
 
