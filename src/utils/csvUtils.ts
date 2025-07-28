@@ -61,6 +61,14 @@ export const downloadCSV = (csvContent: string, filename: string) => {
 
 export const saveToLocalStorage = (products: Product[]) => {
   localStorage.setItem("upc-dashboard-data", JSON.stringify(products));
+
+  // Trigger storage event for real-time sync across browser windows
+  window.dispatchEvent(
+    new StorageEvent("storage", {
+      key: "upc-dashboard-data",
+      newValue: JSON.stringify(products),
+    })
+  );
 };
 
 export const loadFromLocalStorage = (): Product[] | null => {

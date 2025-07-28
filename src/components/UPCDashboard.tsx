@@ -33,6 +33,7 @@ const UPCDashboard: React.FC = () => {
   const [editingUPC, setEditingUPC] = useState("");
   const [editedProducts, setEditedProducts] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Helper function to get the correct title for a product handle
   const getProductTitle = useCallback(
@@ -57,7 +58,7 @@ const UPCDashboard: React.FC = () => {
         setProducts(savedData);
         const processed = processProductsWithUPC(savedData);
         setProcessedProducts(processed);
-        setFilteredProducts(processed);
+        // Don't set filteredProducts here - let the filter useEffect handle it
       } else {
         // Load default CSV if no saved data
         loadDefaultCSV();
@@ -67,6 +68,31 @@ const UPCDashboard: React.FC = () => {
       // Try to load default CSV as fallback
       loadDefaultCSV();
     }
+  }, []);
+
+  // Real-time sync with other browser windows
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "upc-dashboard-data" && e.newValue) {
+        try {
+          setIsSyncing(true);
+          const newData = JSON.parse(e.newValue);
+          setProducts(newData);
+          const processed = processProductsWithUPC(newData);
+          setProcessedProducts(processed);
+          // Don't set filteredProducts here - let the filter useEffect handle it
+
+          // Show sync indicator briefly
+          setTimeout(() => setIsSyncing(false), 1000);
+        } catch (error) {
+          console.error("Error parsing synced data:", error);
+          setIsSyncing(false);
+        }
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
   }, []);
 
   const loadDefaultCSV = async () => {
@@ -177,7 +203,7 @@ const UPCDashboard: React.FC = () => {
         setProducts(parsedProducts);
         const processed = processProductsWithUPC(parsedProducts);
         setProcessedProducts(processed);
-        setFilteredProducts(processed);
+        // Don't set filteredProducts here - let the filter useEffect handle it
         saveToLocalStorage(parsedProducts);
       } catch (error) {
         console.error("Error parsing CSV:", error);
@@ -238,6 +264,15 @@ const UPCDashboard: React.FC = () => {
       console.log("Processed products count:", processed.length);
       setProcessedProducts(processed);
       saveToLocalStorage(updatedProducts);
+
+      // Trigger storage event for real-time sync across browser windows
+      window.dispatchEvent(
+        new StorageEvent("storage", {
+          key: "upc-dashboard-data",
+          newValue: JSON.stringify(updatedProducts),
+          oldValue: JSON.stringify(products),
+        })
+      );
 
       // Track that this product was edited
       const productKey = `${editingProduct}-${editingSKU}`;
@@ -314,6 +349,12 @@ const UPCDashboard: React.FC = () => {
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
             Manage and update UPC codes for your Shopify products with ease
           </p>
+          {isSyncing && (
+            <div className="mt-4 inline-flex items-center px-4 py-2 bg-blue-100 text-blue-800 rounded-lg">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+              Syncing changes from other browser...
+            </div>
+          )}
         </div>
 
         {/* Stats Cards */}
